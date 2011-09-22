@@ -274,16 +274,24 @@ class application:
                     raise web.nomethod()
 
                 result = self.handle_with_processors()
-                if is_generator(result):
-                    result = peep(result)
-                else:
-                    result = [result]
+                # if is_generator(result):
+                #     result = peep(result)
+                # else:
+                #     result = [result]
             except web.HTTPError as e:
                 result = [e.data]
 
-            result = web.safestr(iter(result))
+            # result = web.safestr(iter(result)) # this way i've got '<iterator.chain... string in browser'
+            result = web.safestr(result)
 
-            status, headers = web.ctx.status, web.ctx.headers
+            status, headers = web.ctx.status.encode('latin-1'), web.ctx.headers
+
+            bheaders = []
+            for hdr in headers:
+                foo = [s.encode('latin-1') for s in headers[0]]
+                bheaders.append(tuple(foo))
+
+            headers = bheaders
             start_resp(status, headers)
 
             def cleanup():

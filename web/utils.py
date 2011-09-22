@@ -359,9 +359,9 @@ def safestr(obj, encoding='utf-8'):
         '2'
     """
     if isinstance(obj, str):
-        return obj.encode(encoding)
-    elif isinstance(obj, str):
-        return obj
+        # return obj.encode(encoding)
+        # return str( obj, encoding=encoding)
+        return str( obj )
     elif hasattr(obj, 'next'): # iterator
         return map(safestr, obj)
     else:
