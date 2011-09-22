@@ -21,11 +21,11 @@ try: set
 except NameError:
     from sets import Set as set
     
-from utils import threadeddict, storage, iters, iterbetter, safestr, safeunicode
+from .utils import threadeddict, storage, iters, iterbetter, safestr, safeunicode
 
 try:
     # db module can work independent of web.py
-    from webapi import debug, config
+    from .webapi import debug, config
 except:
     import sys
     debug = sys.stderr
@@ -78,7 +78,7 @@ class SQLParam(object):
             return ':1'
         elif paramstyle is None or paramstyle in ['format', 'pyformat']:
             return '%s'
-        raise UnknownParamstyle, paramstyle
+        raise UnknownParamstyle(paramstyle)
         
     def sqlquery(self): 
         return SQLQuery([self])
@@ -142,7 +142,7 @@ class SQLQuery(object):
         self.items.append(value)
 
     def __add__(self, other):
-        if isinstance(other, basestring):
+        if isinstance(other, str):
             items = [other]
         elif isinstance(other, SQLQuery):
             items = other.items
@@ -151,7 +151,7 @@ class SQLQuery(object):
         return SQLQuery(self.items + items)
 
     def __radd__(self, other):
-        if isinstance(other, basestring):
+        if isinstance(other, str):
             items = [other]
         else:
             return NotImplemented
@@ -159,7 +159,7 @@ class SQLQuery(object):
         return SQLQuery(items + self.items)
 
     def __iadd__(self, other):
-        if isinstance(other, (basestring, SQLParam)):
+        if isinstance(other, (str, SQLParam)):
             self.items.append(other)
         elif isinstance(other, SQLQuery):
             self.items.extend(other.items)
@@ -241,7 +241,7 @@ class SQLQuery(object):
     
     def _str(self):
         try:
-            return self.query() % tuple([sqlify(x) for x in self.values()])            
+            return self.query() % tuple([sqlify(x) for x in list(self.values())])            
         except (ValueError, TypeError):
             return self.query()
         
@@ -329,7 +329,7 @@ def sqlify(obj):
     elif datetime and isinstance(obj, datetime.datetime):
         return repr(obj.isoformat())
     else:
-        if isinstance(obj, unicode): obj = obj.encode('utf8')
+        if isinstance(obj, str): obj = obj.encode('utf8')
         return repr(obj)
 
 def sqllist(lst): 
@@ -343,7 +343,7 @@ def sqllist(lst):
         >>> sqllist(u'abc')
         u'abc'
     """
-    if isinstance(lst, basestring): 
+    if isinstance(lst, str): 
         return lst
     else:
         return ', '.join(lst)
@@ -391,7 +391,7 @@ def sqlwhere(dictionary, grouping=' AND '):
         >>> sqlwhere({'a': 'a', 'b': 'b'}).query()
         'a = %s AND b = %s'
     """
-    return SQLQuery.join([k + ' = ' + sqlparam(v) for k, v in dictionary.items()], grouping)
+    return SQLQuery.join([k + ' = ' + sqlparam(v) for k, v in list(dictionary.items())], grouping)
 
 def sqlquote(a): 
     """
@@ -575,7 +575,7 @@ class DB:
             return ':1'
         elif style in ['format', 'pyformat']:
             return '%s'
-        raise UnknownParamstyle, style
+        raise UnknownParamstyle(style)
 
     def _db_execute(self, cur, sql_query): 
         """executes an sql query"""
@@ -588,7 +588,7 @@ class DB:
             b = time.time()
         except:
             if self.printing:
-                print >> debug, 'ERR:', str(sql_query)
+                print('ERR:', str(sql_query), file=debug)
             if self.ctx.transactions:
                 self.ctx.transactions[-1].rollback()
             else:
@@ -596,7 +596,7 @@ class DB:
             raise
 
         if self.printing:
-            print >> debug, '%s (%s): %s' % (round(b-a, 2), self.ctx.dbq_count, str(sql_query))
+            print('%s (%s): %s' % (round(b-a, 2), self.ctx.dbq_count, str(sql_query)), file=debug)
         return out
 
     def _process_query(self, sql_query):
@@ -604,11 +604,11 @@ class DB:
         """
         paramstyle = getattr(self, 'paramstyle', 'pyformat')
         query = sql_query.query(paramstyle)
-        params = sql_query.values()
+        params = list(sql_query.values())
         return query, params
     
     def _where(self, where, vars): 
-        if isinstance(where, (int, long)):
+        if isinstance(where, int):
             where = "id = " + sqlparam(where)
         #@@@ for backward-compatibility
         elif isinstance(where, (list, tuple)) and len(where) == 2:
@@ -648,11 +648,11 @@ class DB:
             def iterwrapper():
                 row = db_cursor.fetchone()
                 while row:
-                    yield storage(dict(zip(names, row)))
+                    yield storage(dict(list(zip(names, row))))
                     row = db_cursor.fetchone()
             out = iterbetter(iterwrapper())
             out.__len__ = lambda: int(db_cursor.rowcount)
-            out.list = lambda: [storage(dict(zip(names, x))) \
+            out.list = lambda: [storage(dict(list(zip(names, x)))) \
                                for x in db_cursor.fetchall()]
         else:
             out = db_cursor.rowcount
@@ -695,7 +695,7 @@ class DB:
             <sql: 'SELECT * FROM foo'>
         """
         where_clauses = []
-        for k, v in kwargs.iteritems():
+        for k, v in kwargs.items():
             where_clauses.append(k + ' = ' + sqlquote(v))
             
         if where_clauses:
@@ -718,7 +718,7 @@ class DB:
             ('OFFSET', offset))
     
     def gen_clause(self, sql, val, vars): 
-        if isinstance(val, (int, long)):
+        if isinstance(val, int):
             if sql == 'WHERE':
                 nout = 'id = ' + sqlquote(val)
             else:
@@ -755,8 +755,8 @@ class DB:
         def q(x): return "(" + x + ")"
         
         if values:
-            _keys = SQLQuery.join(values.keys(), ', ')
-            _values = SQLQuery.join([sqlparam(v) for v in values.values()], ', ')
+            _keys = SQLQuery.join(list(values.keys()), ', ')
+            _values = SQLQuery.join([sqlparam(v) for v in list(values.values())], ', ')
             sql_query = "INSERT INTO %s " % tablename + q(_keys) + ' VALUES ' + q(_values)
         else:
             sql_query = SQLQuery(self._get_insert_default_values_query(tablename))
@@ -812,13 +812,13 @@ class DB:
             else:
                 return out
                 
-        keys = values[0].keys()
+        keys = list(values[0].keys())
         #@@ make sure all keys are valid
 
         # make sure all rows have same keys.
         for v in values:
-            if v.keys() != keys:
-                raise ValueError, 'Bad data'
+            if list(v.keys()) != keys:
+                raise ValueError('Bad data')
 
         sql_query = SQLQuery('INSERT INTO %s (%s) VALUES ' % (tablename, ', '.join(keys)))
 
@@ -844,7 +844,7 @@ class DB:
 
         try: 
             out = db_cursor.fetchone()[0]
-            out = range(out-len(values)+1, out+1)        
+            out = list(range(out-len(values)+1, out+1))        
         except Exception: 
             out = None
 
@@ -1080,7 +1080,7 @@ class MSSQLDB(DB):
         # Overwriting the default implementation to convert params to tuple.
         paramstyle = getattr(self, 'paramstyle', 'pyformat')
         query = sql_query.query(paramstyle)
-        params = sql_query.values()
+        params = list(sql_query.values())
         return query, tuple(params)
 
     def sql_clauses(self, what, tables, where, group, order, limit, offset): 
@@ -1141,7 +1141,7 @@ def database(dburl=None, **params):
     if dbn in _databases:
         return _databases[dbn](**params)
     else:
-        raise UnknownDB, dbn
+        raise UnknownDB(dbn)
 
 def register_database(name, clazz):
     """

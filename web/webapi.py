@@ -28,8 +28,8 @@ __all__ = [
     "internalerror",
 ]
 
-import sys, cgi, Cookie, pprint, urlparse, urllib
-from utils import storage, storify, threadeddict, dictadd, intget, safestr
+import sys, cgi, http.cookies, pprint, urllib.parse, urllib.request, urllib.parse, urllib.error
+from .utils import storage, storify, threadeddict, dictadd, intget, safestr
 
 config = storage()
 config.__doc__ = """
@@ -42,7 +42,7 @@ A configuration object for various aspects of web.py.
 class HTTPError(Exception):
     def __init__(self, status, headers={}, data=""):
         ctx.status = status
-        for k, v in headers.items():
+        for k, v in list(headers.items()):
             header(k, v)
         self.data = data
         Exception.__init__(self, status)
@@ -74,7 +74,7 @@ class Redirect(HTTPError):
         `url` is joined with the base URL so that things like 
         `redirect("about") will work properly.
         """
-        newloc = urlparse.urljoin(ctx.path, url)
+        newloc = urllib.parse.urljoin(ctx.path, url)
 
         if newloc.startswith('/'):
             if absolute:
@@ -213,7 +213,7 @@ def header(hdr, value, unique=False):
     hdr, value = safestr(hdr), safestr(value)
     # protection against HTTP response splitting attack
     if '\n' in hdr or '\r' in hdr or '\n' in value or '\r' in value:
-        raise ValueError, 'invalid characters in header'
+        raise ValueError('invalid characters in header')
         
     if unique is True:
         for h, v in ctx.headers:
@@ -225,14 +225,14 @@ def rawinput(method=None):
     """Returns storage object with GET or POST arguments.
     """
     method = method or "both"
-    from cStringIO import StringIO
+    from io import StringIO
 
     def dictify(fs): 
         # hack to make web.input work with enctype='text/plain.
         if fs.list is None:
             fs.list = [] 
 
-        return dict([(k, fs[k]) for k in fs.keys()])
+        return dict([(k, fs[k]) for k in list(fs.keys())])
     
     e = ctx.env.copy()
     a = b = {}
@@ -265,7 +265,7 @@ def rawinput(method=None):
         else:
             return fs
 
-    return storage([(k, process_fieldstorage(v)) for k, v in dictadd(b, a).items()])
+    return storage([(k, process_fieldstorage(v)) for k, v in list(dictadd(b, a).items())])
 
 def input(*requireds, **defaults):
     """
@@ -290,9 +290,9 @@ def data():
 def setcookie(name, value, expires='', domain=None,
               secure=False, httponly=False, path=None):
     """Sets a cookie."""
-    morsel = Cookie.Morsel()
+    morsel = http.cookies.Morsel()
     name, value = safestr(name), safestr(value)
-    morsel.set(name, value, urllib.quote(value))
+    morsel.set(name, value, urllib.parse.quote(value))
     if expires < 0:
         expires = -1000000000
     morsel['expires'] = expires
@@ -311,12 +311,12 @@ def cookies(*requireds, **defaults):
     Returns a `storage` object with all the cookies in it.
     See `storify` for how `requireds` and `defaults` work.
     """
-    cookie = Cookie.SimpleCookie()
+    cookie = http.cookies.SimpleCookie()
     cookie.load(ctx.env.get('HTTP_COOKIE', ''))
     try:
         d = storify(cookie, *requireds, **defaults)
-        for k, v in d.items():
-            d[k] = v and urllib.unquote(v)
+        for k, v in list(d.items()):
+            d[k] = v and urllib.parse.unquote(v)
         return d
     except KeyError:
         badrequest()
@@ -331,7 +331,7 @@ def debug(*args):
     except: 
         out = sys.stderr
     for arg in args:
-        print >> out, pprint.pformat(arg)
+        print(pprint.pformat(arg), file=out)
     return ''
 
 def _debugwrite(x):

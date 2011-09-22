@@ -2,13 +2,13 @@
 Web application
 (from web.py)
 """
-import webapi as web
-import webapi, wsgi, utils
-import debugerror
-from utils import lstrips, safeunicode
+from . import webapi as web
+from . import webapi, wsgi, utils
+from . import debugerror
+from .utils import lstrips, safeunicode
 import sys
 
-import urllib
+import urllib.request, urllib.parse, urllib.error
 import traceback
 import itertools
 import os
@@ -182,7 +182,7 @@ class application:
             'your user-agent is a small jumping bean/1.0 (compatible)'
 
         """
-        path, maybe_query = urllib.splitquery(localpart)
+        path, maybe_query = urllib.parse.splitquery(localpart)
         query = maybe_query or ""
         
         if 'env' in kw:
@@ -192,7 +192,7 @@ class application:
         env = dict(env, HTTP_HOST=host, REQUEST_METHOD=method, PATH_INFO=path, QUERY_STRING=query, HTTPS=str(https))
         headers = headers or {}
 
-        for k, v in headers.items():
+        for k, v in list(headers.items()):
             env['HTTP_' + k.upper().replace('-', '_')] = v
 
         if 'HTTP_CONTENT_LENGTH' in env:
@@ -203,12 +203,12 @@ class application:
 
         if method in ["POST", "PUT"]:
             data = data or ''
-            import StringIO
+            import io
             if isinstance(data, dict):
-                q = urllib.urlencode(data)
+                q = urllib.parse.urlencode(data)
             else:
                 q = data
-            env['wsgi.input'] = StringIO.StringIO(q)
+            env['wsgi.input'] = io.StringIO(q)
             if not env.get('CONTENT_TYPE', '').lower().startswith('multipart/') and 'CONTENT_LENGTH' not in env:
                 env['CONTENT_LENGTH'] = len(q)
         response = web.storage()
@@ -220,7 +220,7 @@ class application:
         return response
 
     def browser(self):
-        import browser
+        from . import browser
         return browser.AppBrowser(self)
 
     def handle(self):
@@ -240,7 +240,7 @@ class application:
             except (KeyboardInterrupt, SystemExit):
                 raise
             except:
-                print >> web.debug, traceback.format_exc()
+                print(traceback.format_exc(), file=web.debug)
                 raise self.internalerror()
         
         # processors must be applied in the resvere order. (??)
@@ -256,7 +256,7 @@ class application:
             # so we need to do an iteration
             # and save the result for later
             try:
-                firstchunk = iterator.next()
+                firstchunk = next(iterator)
             except StopIteration:
                 firstchunk = ''
 
@@ -279,7 +279,7 @@ class application:
                     result = peep(result)
                 else:
                     result = [result]
-            except web.HTTPError, e:
+            except web.HTTPError as e:
                 result = [e.data]
 
             result = web.safestr(iter(result))
@@ -356,7 +356,7 @@ class application:
             ctx.path = lstrips(env.get('REQUEST_URI').split('?')[0], ctx.homepath)
             # Apache and CherryPy webservers unquote the url but lighttpd doesn't. 
             # unquote explicitly for lighttpd to make ctx.path uniform across all servers.
-            ctx.path = urllib.unquote(ctx.path)
+            ctx.path = urllib.parse.unquote(ctx.path)
 
         if env.get('QUERY_STRING'):
             ctx.query = '?' + env.get('QUERY_STRING', '')
@@ -365,7 +365,7 @@ class application:
 
         ctx.fullpath = ctx.path + ctx.query
         
-        for k, v in ctx.iteritems():
+        for k, v in ctx.items():
             if isinstance(v, str):
                 ctx[k] = safeunicode(v)
 
@@ -384,7 +384,7 @@ class application:
             tocall = getattr(cls(), meth)
             return tocall(*args)
             
-        def is_class(o): return isinstance(o, (types.ClassType, type))
+        def is_class(o): return isinstance(o, type)
             
         if f is None:
             raise web.notfound()
@@ -392,7 +392,7 @@ class application:
             return f.handle_with_processors()
         elif is_class(f):
             return handle_class(f)
-        elif isinstance(f, basestring):
+        elif isinstance(f, str):
             if f.startswith('redirect '):
                 url = f.split(' ', 1)[1]
                 if web.ctx.method == "GET":
@@ -420,7 +420,7 @@ class application:
                     return f, None
                 else:
                     continue
-            elif isinstance(what, basestring):
+            elif isinstance(what, str):
                 what, result = utils.re_subm('^' + pat + '$', what, value)
             else:
                 result = utils.re_compile('^' + pat + '$').match(value)
@@ -463,7 +463,7 @@ class application:
         if parent:
             return parent.internalerror()
         elif web.config.get('debug'):
-            import debugerror
+            from . import debugerror
             return debugerror.debugerror()
         else:
             return web._InternalError()
@@ -497,9 +497,8 @@ class auto_application(application):
                 if path is not None:
                     self.add_mapping(path, klass)
 
-        class page:
+        class page(metaclass=metapage):
             path = None
-            __metaclass__ = metapage
 
         self.page = page
 
@@ -532,7 +531,7 @@ class subdomain_application(application):
         
     def _match(self, mapping, value):
         for pat, what in mapping:
-            if isinstance(what, basestring):
+            if isinstance(what, str):
                 what, result = utils.re_subm('^' + pat + '$', what, value)
             else:
                 result = utils.re_compile('^' + pat + '$').match(value)
@@ -583,7 +582,7 @@ def unloadhook(h):
     def wrap(result):
         def next():
             try:
-                return result.next()
+                return next(result)
             except:
                 # call the hook at the and of iterator
                 h()
@@ -643,7 +642,7 @@ class Reloader:
         self.mtimes = {}
 
     def __call__(self):
-        for mod in sys.modules.values():
+        for mod in list(sys.modules.values()):
             self.check(mod)
 
     def check(self, mod):

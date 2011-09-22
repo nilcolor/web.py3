@@ -10,10 +10,10 @@ __all__ = [
   "profiler",
 ]
 
-import sys, os, threading, urllib, urlparse
+import sys, os, threading, urllib.request, urllib.parse, urllib.error, urllib.parse
 try: import datetime
 except ImportError: pass
-import net, utils, webapi as web
+from . import net, utils, webapi as web
 
 def prefixurl(base=''):
     """
@@ -21,7 +21,7 @@ def prefixurl(base=''):
     Maybe some other time.
     """
     url = web.ctx.path.lstrip('/')
-    for i in xrange(url.count('/')): 
+    for i in range(url.count('/')): 
         base += '../'
     if not base: 
         base = './'
@@ -32,7 +32,7 @@ def expires(delta):
     Outputs an `Expires` header for `delta` from now. 
     `delta` is a `timedelta` object or a number of seconds.
     """
-    if isinstance(delta, (int, long)):
+    if isinstance(delta, int):
         delta = datetime.timedelta(seconds=delta)
     date_obj = datetime.datetime.utcnow() + delta
     web.header('Expires', net.httpdate(date_obj))
@@ -60,7 +60,7 @@ def modified(date=None, etag=None):
     `Last-Modified` and `ETag` output headers.
     """
     try:
-        from __builtin__ import set
+        from builtins import set
     except ImportError:
         # for python 2.3
         from sets import Set as set
@@ -99,8 +99,8 @@ def urlencode(query, doseq=0):
         else:
             return utils.safestr(value)
         
-    query = dict([(k, convert(v, doseq)) for k, v in query.items()])
-    return urllib.urlencode(query, doseq=doseq)
+    query = dict([(k, convert(v, doseq)) for k, v in list(query.items())])
+    return urllib.parse.urlencode(query, doseq=doseq)
 
 def changequery(query=None, **kw):
     """
@@ -110,7 +110,7 @@ def changequery(query=None, **kw):
     """
     if query is None:
         query = web.rawinput(method='get')
-    for k, v in kw.iteritems():
+    for k, v in kw.items():
         if v is None:
             query.pop(k, None)
         else:
@@ -139,7 +139,7 @@ def url(path=None, doseq=False, **kw):
 
 def profiler(app):
     """Outputs basic profiling information at the bottom of each response."""
-    from utils import profile
+    from .utils import profile
     def profile_internal(e, o):
         out, result = profile(app)(e, o)
         return list(out) + ['<pre>' + net.websafe(result) + '</pre>']

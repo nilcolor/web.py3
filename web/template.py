@@ -42,9 +42,9 @@ import glob
 import re
 from UserDict import DictMixin
 
-from utils import storage, safeunicode, safestr, re_compile
-from webapi import config
-from net import websafe
+from .utils import storage, safeunicode, safestr, re_compile
+from .webapi import config
+from .net import websafe
 
 def splitline(text):
     r"""
@@ -261,7 +261,7 @@ class Parser:
             extended_expr()
         
         def identifier():
-            tokens.next()
+            next(tokens)
         
         def extended_expr():
             lookahead = tokens.lookahead()
@@ -279,7 +279,7 @@ class Parser:
             from token import NAME # python token constants
             dot = tokens.lookahead()
             if tokens.lookahead2().type == NAME:
-                tokens.next() # consume dot
+                next(tokens) # consume dot
                 identifier()
                 extended_expr()
         
@@ -290,7 +290,7 @@ class Parser:
                 if tokens.lookahead().value in parens:
                     paren_expr()
                 else:
-                    t = tokens.next()
+                    t = next(tokens)
                     if t.value == end:
                         break
             return
@@ -307,7 +307,7 @@ class Parser:
             This function introduces dummy space tokens when it identifies any ignored space.
             Each token is a storage object containing type, value, begin and end.
             """
-            readline = iter([text]).next
+            readline = iter([text]).__next__
             end = None
             for t in tokenize.generate_tokens(readline):
                 t = storage(type=t[0], value=t[1], begin=t[2], end=t[3])
@@ -333,7 +333,7 @@ class Parser:
 
             def _next(self):
                 try:
-                    return self.iteritems.next()
+                    return next(self.iteritems)
                 except StopIteration:
                     return None
                 
@@ -342,7 +342,7 @@ class Parser:
                     self.items.append(self._next())
                 return self.items[self.position+1]
                     
-            def next(self):
+            def __next__(self):
                 self.current_item = self.lookahead()
                 self.position += 1
                 return self.current_item
@@ -377,12 +377,12 @@ class Parser:
             >>> python_lookahead(' x = 1')
             ' '
         """
-        readline = iter([text]).next
+        readline = iter([text]).__next__
         tokens = tokenize.generate_tokens(readline)
         return tokens.next()[1]
         
     def python_tokens(self, text):
-        readline = iter([text]).next
+        readline = iter([text]).__next__
         tokens = tokenize.generate_tokens(readline)
         return [t[1] for t in tokens]
         
@@ -465,13 +465,13 @@ class Parser:
         if keyword in self.statement_nodes:
             return self.statement_nodes[keyword](stmt, block, begin_indent)
         else:
-            raise ParseError, 'Unknown statement: %s' % repr(keyword)
+            raise ParseError('Unknown statement: %s' % repr(keyword))
         
 class PythonTokenizer:
     """Utility wrapper over python tokenizer."""
     def __init__(self, text):
         self.text = text
-        readline = iter([text]).next
+        readline = iter([text]).__next__
         self.tokens = tokenize.generate_tokens(readline)
         self.index = 0
         
@@ -487,7 +487,7 @@ class PythonTokenizer:
         """
         try:
             while True:
-                t = self.next()
+                t = next(self)
                 if t.value == delim:
                     break
                 elif t.value == '(':
@@ -510,8 +510,8 @@ class PythonTokenizer:
             # if this error is ignored, then it will be caught when compiling the python code.
             return
     
-    def next(self):
-        type, t, begin, end, line = self.tokens.next()
+    def __next__(self):
+        type, t, begin, end, line = next(self.tokens)
         row, col = end
         self.index = col
         return storage(type=type, value=t, begin=begin, end=end)
@@ -720,8 +720,8 @@ TEMPLATE_BUILTIN_NAMES = [
     "__import__", # some c-libraries like datetime requires __import__ to present in the namespace
 ]
 
-import __builtin__
-TEMPLATE_BUILTINS = dict([(name, getattr(__builtin__, name)) for name in TEMPLATE_BUILTIN_NAMES if name in __builtin__.__dict__])
+import builtins
+TEMPLATE_BUILTINS = dict([(name, getattr(__builtin__, name)) for name in TEMPLATE_BUILTIN_NAMES if name in builtins.__dict__])
 
 class ForLoop:
     """
@@ -744,7 +744,7 @@ class ForLoop:
         
     def __getattr__(self, name):
         if self._ctx is None:
-            raise AttributeError, name
+            raise AttributeError(name)
         else:
             return getattr(self._ctx, name)
         
@@ -815,7 +815,7 @@ class BaseTemplate:
             join_=self._join
         )
     def _join(self, *items):
-        return u"".join(items)
+        return "".join(items)
             
     def _escape(self, value, escape=False):
         if value is None: 
@@ -873,7 +873,7 @@ class Template(BaseTemplate):
                 
     def __call__(self, *a, **kw):
         __hidetraceback__ = True
-        import webapi as web
+        from . import webapi as web
         if 'headers' in web.ctx and self.content_type:
             web.header('Content-Type', self.content_type, unique=True)
             
@@ -909,7 +909,7 @@ class Template(BaseTemplate):
         try:
             # compile the code first to report the errors, if any, with the filename
             compiled_code = compile(code, filename, 'exec')
-        except SyntaxError, e:
+        except SyntaxError as e:
             # display template line that caused the error along with the traceback.
             try:
                 e.msg += '\n\nTemplate traceback:\n    File %s, line %s\n        %s' % \
@@ -995,7 +995,7 @@ class Render:
         elif kind == 'file':
             return Template(open(path).read(), filename=path, **self._keywords)
         else:
-            raise AttributeError, "No template named " + name            
+            raise AttributeError("No template named " + name)            
 
     def _findfile(self, path_prefix): 
         p = [f for f in glob.glob(path_prefix + '.*') if not f.endswith('~')] # skip backup files
@@ -1158,7 +1158,7 @@ class SafeVisitor(object):
         self.visit(ast)
         
         if self.errors:        
-            raise SecurityError, '\n'.join([str(err) for err in self.errors])
+            raise SecurityError('\n'.join([str(err) for err in self.errors]))
         
     def visit(self, node, *args):
         "Recursively validate node and all of its children."
@@ -1234,7 +1234,7 @@ class TemplateResult(object, DictMixin):
     """
     def __init__(self, *a, **kw):
         self.__dict__["_d"] = dict(*a, **kw)
-        self._d.setdefault("__body__", u'')
+        self._d.setdefault("__body__", '')
         
         self.__dict__['_parts'] = []
         self.__dict__["extend"] = self._parts.extend
@@ -1242,13 +1242,13 @@ class TemplateResult(object, DictMixin):
         self._d.setdefault("__body__", None)
     
     def keys(self):
-        return self._d.keys()
+        return list(self._d.keys())
         
     def _prepare_body(self):
         """Prepare value of __body__ by joining parts.
         """
         if self._parts:
-            value = u"".join(self._parts)
+            value = "".join(self._parts)
             self._parts[:] = []
             body = self._d.get('__body__')
             if body:
@@ -1274,8 +1274,8 @@ class TemplateResult(object, DictMixin):
     def __getattr__(self, key): 
         try:
             return self[key]
-        except KeyError, k:
-            raise AttributeError, k
+        except KeyError as k:
+            raise AttributeError(k)
 
     def __setattr__(self, key, value): 
         self[key] = value
@@ -1283,8 +1283,8 @@ class TemplateResult(object, DictMixin):
     def __delattr__(self, key):
         try:
             del self[key]
-        except KeyError, k:
-            raise AttributeError, k
+        except KeyError as k:
+            raise AttributeError(k)
         
     def __unicode__(self):
         self._prepare_body()

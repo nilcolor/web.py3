@@ -4,11 +4,11 @@ HTML forms
 """
 
 import copy, re
-import webapi as web
-import utils, net
+from . import webapi as web
+from . import utils, net
 
 def attrget(obj, attr, value=None):
-    if hasattr(obj, 'has_key') and obj.has_key(attr): return obj[attr]
+    if hasattr(obj, 'has_key') and attr in obj: return obj[attr]
     if hasattr(obj, attr): return getattr(obj, attr)
     return value
 
@@ -90,14 +90,14 @@ class Form(object):
     def __getitem__(self, i):
         for x in self.inputs:
             if x.name == i: return x
-        raise KeyError, i
+        raise KeyError(i)
 
     def __getattr__(self, name):
         # don't interfere with deepcopy
         inputs = self.__dict__.get('inputs') or []
         for x in inputs:
             if x.name == name: return x
-        raise AttributeError, name
+        raise AttributeError(name)
     
     def get(self, i, default=None):
         try:
@@ -178,7 +178,7 @@ class AttributeList(dict):
         return AttributeList(self)
         
     def __str__(self):
-        return " ".join(['%s="%s"' % (k, net.websafe(v)) for k, v in self.items()])
+        return " ".join(['%s="%s"' % (k, net.websafe(v)) for k, v in list(self.items())])
         
     def __repr__(self):
         return '<attrs: %s>' % repr(str(self))

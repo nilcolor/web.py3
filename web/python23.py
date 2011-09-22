@@ -14,7 +14,7 @@ class threadlocal(object):
                 try:
                     return self.__dict__[name]
                 except KeyError:
-                    raise AttributeError, name
+                    raise AttributeError(name)
             
     def __setattr__(self, name, value):
         self.__dict__[name] = value
@@ -23,7 +23,7 @@ class threadlocal(object):
         try:
             del self.__dict__[name]
         except KeyError:
-            raise AttributeError, name
+            raise AttributeError(name)
     
     def _getd(self):
         t = threading.currentThread()
@@ -41,6 +41,6 @@ class threadlocal(object):
 if __name__ == '__main__':
      d = threadlocal()
      d.x = 1
-     print d.__dict__
-     print d.x
+     print(d.__dict__)
+     print(d.x)
      

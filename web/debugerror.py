@@ -10,11 +10,11 @@ http://www.xfree86.org/3.3.6/COPYRIGHT2.html#5
 
 __all__ = ["debugerror", "djangoerror", "emailerrors"]
 
-import sys, urlparse, pprint, traceback
-from template import Template
-from net import websafe
-from utils import sendmail, safestr
-import webapi as web
+import sys, urllib.parse, pprint, traceback
+from .template import Template
+from .net import websafe
+from .utils import sendmail, safestr
+from . import webapi as web
 
 import os, os.path
 whereami = os.path.join(os.getcwd(), __file__)
@@ -276,11 +276,11 @@ def djangoerror():
             }))
         tback = tback.tb_next
     frames.reverse()
-    urljoin = urlparse.urljoin
+    urljoin = urllib.parse.urljoin
     def prettify(x):
         try: 
             out = pprint.pformat(x)
-        except Exception, e: 
+        except Exception as e: 
             out = '[could not display: <' + e.__class__.__name__ + \
                   ': '+str(e)+'>]'
         return out
@@ -291,7 +291,7 @@ def djangoerror():
         
     t = djangoerror_r
     globals = {'ctx': web.ctx, 'web':web, 'dict':dict, 'str':str, 'prettify': prettify}
-    t.t.func_globals.update(globals)
+    t.t.__globals__.update(globals)
     return t(exception_type, exception_value, frames)
 
 def debugerror():
@@ -343,7 +343,7 @@ if __name__ == "__main__":
     urls = (
         '/', 'index'
     )
-    from application import application
+    from .application import application
     app = application(urls, globals())
     app.internalerror = debugerror
     
